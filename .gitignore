@@ -12,3 +12,17 @@
 
 # Project-local glide cache, RE: https://github.com/Masterminds/glide/issues/736
 .glide/
+
+
+# OSX
+.DS_Store
+.AppleDouble
+.LSOverride
+
+
+# Covers JetBrains IDEs: IntelliJ, RubyMine, PhpStorm, AppCode, PyCharm
+.idea/
+*.ipr
+*.iws
+*.iml
+out/

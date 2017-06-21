@@ -1,2 +1,2 @@
 # go-blink
-Go web framework
+Blink is a concise web framework with batteries.
