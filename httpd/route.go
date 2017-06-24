@@ -1,7 +1,8 @@
-package router
+package httpd
 
 import (
 	"fmt"
+	"net/http"
 	"strings"
 )
 
@@ -49,6 +50,14 @@ func (r *Route) GET(pattern string, h Handler)    { r.Handler(GET, pattern, h) }
 func (r *Route) POST(pattern string, h Handler)   { r.Handler(POST, pattern, h) }
 func (r *Route) PUT(pattern string, h Handler)    { r.Handler(PUT, pattern, h) }
 func (r *Route) DELETE(pattern string, h Handler) { r.Handler(DELETE, pattern, h) }
+
+func (r *Route) Static(pattern string, dir http.Dir) {
+	if !strings.HasSuffix(pattern, "/*") {
+		panic("router: Static path must end with /*")
+	}
+
+	r.GET(pattern, NewStaticHandler(dir))
+}
 
 func (r *Route) Add(pattern string, child *Route) {
 	if pattern == "" || pattern == "/" {
@@ -169,7 +178,7 @@ func (r *Route) Resolve(path string) ([]*Route, Params, error) {
 				child, ok = route.Children[catchAllSegment]
 
 				if !ok {
-					return nil, nil, ErrNotFound
+					return nil, nil, ErrRouteNotFound
 				}
 
 				routes = append(routes, child)

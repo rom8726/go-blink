@@ -1,6 +1,8 @@
-package router
+package httpd
 
 import (
+	"context"
+	"encoding/json"
 	"github.com/manucorporat/sse"
 	"net/http"
 	"sync"
@@ -8,7 +10,7 @@ import (
 
 type SSEStream struct {
 	mu        sync.Mutex
-	listeners []sseStreamListener
+	listeners []SSEStreamListener
 
 	close    chan struct{}
 	closed   chan struct{}
@@ -18,9 +20,9 @@ type SSEStream struct {
 	w http.ResponseWriter
 }
 
-type sseStreamListener interface {
-	onSSEStreamOpened(s *SSEStream)
-	onSSEStreamClosed(s *SSEStream)
+type SSEStreamListener interface {
+	OnSSEStreamOpened(s *SSEStream)
+	OnSSEStreamClosed(s *SSEStream)
 }
 
 func NewSSEStream(w http.ResponseWriter, r *http.Request) (*SSEStream, error) {
@@ -43,6 +45,9 @@ func NewSSEStream(w http.ResponseWriter, r *http.Request) (*SSEStream, error) {
 	return stream, nil
 }
 
+func (s *SSEStream) Closed() <-chan struct{}    { return s.closed }
+func (s *SSEStream) Outgoing() chan<- sse.Event { return s.outgoing }
+
 func (s *SSEStream) Close() <-chan struct{} {
 	select {
 	case s.close <- struct{}{}:
@@ -51,12 +56,24 @@ func (s *SSEStream) Close() <-chan struct{} {
 	return s.closed
 }
 
-func (s *SSEStream) Closed() <-chan struct{} {
-	return s.closed
+func (s *SSEStream) Send(ctx context.Context, text string) {
+	event := sse.Event{Data: text}
+	select {
+	case s.outgoing <- event:
+	case <-ctx.Done():
+		return
+	}
 }
 
-func (s *SSEStream) Outgoing() chan<- sse.Event {
-	return s.outgoing
+func (s *SSEStream) SendJSON(ctx context.Context, v interface{}) error {
+	bytes, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	text := string(bytes)
+	s.Send(ctx, text)
+	return nil
 }
 
 func (s *SSEStream) loop() {
@@ -85,11 +102,11 @@ func (s *SSEStream) loop() {
 func (s *SSEStream) onClosed() {
 	listeners := s.copyListeners()
 	for _, l := range listeners {
-		l.onSSEStreamClosed(s)
+		l.OnSSEStreamClosed(s)
 	}
 }
 
-func (s *SSEStream) addListener(l sseStreamListener) {
+func (s *SSEStream) addListener(l SSEStreamListener) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -99,9 +116,16 @@ func (s *SSEStream) addListener(l sseStreamListener) {
 		}
 	}
 	s.listeners = append(s.listeners, l)
+
+	select {
+	case <-s.closed:
+		l.OnSSEStreamClosed(s)
+	default:
+		l.OnSSEStreamOpened(s)
+	}
 }
 
-func (s *SSEStream) removeListener(l sseStreamListener) {
+func (s *SSEStream) removeListener(l SSEStreamListener) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -114,14 +138,14 @@ func (s *SSEStream) removeListener(l sseStreamListener) {
 	s.listeners = filtered
 }
 
-func (s *SSEStream) copyListeners() []sseStreamListener {
+func (s *SSEStream) copyListeners() []SSEStreamListener {
 	s.mu.Lock()
 	if len(s.listeners) == 0 {
 		s.mu.Unlock()
 		return nil
 	}
 
-	listeners := make([]sseStreamListener, len(s.listeners))
+	listeners := make([]SSEStreamListener, len(s.listeners))
 	copy(listeners, s.listeners)
 	s.mu.Unlock()
 	return listeners

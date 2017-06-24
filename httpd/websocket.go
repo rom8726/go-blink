@@ -1,6 +1,8 @@
-package router
+package httpd
 
 import (
+	"context"
+	"encoding/json"
 	"github.com/gorilla/websocket"
 	"net/http"
 	"sync"
@@ -10,7 +12,7 @@ import (
 type WebSocket struct {
 	mu        sync.Mutex
 	conn      *websocket.Conn
-	listeners []webSocketListener
+	listeners []WebSocketListener
 
 	close  chan struct{}
 	closed chan struct{}
@@ -25,9 +27,9 @@ type WebSocketOptions struct {
 	WriteBufferSize int
 }
 
-type webSocketListener interface {
-	onWebSocketOpened(ws *WebSocket)
-	onWebSocketClosed(ws *WebSocket)
+type WebSocketListener interface {
+	OnWebSocketOpened(ws *WebSocket)
+	OnWebSocketClosed(ws *WebSocket)
 }
 
 func NewWebSocket(w http.ResponseWriter, r *http.Request, opts *WebSocketOptions) (*WebSocket, error) {
@@ -58,6 +60,26 @@ func NewWebSocket(w http.ResponseWriter, r *http.Request, opts *WebSocketOptions
 func (ws *WebSocket) Closed() <-chan struct{} { return ws.closed }
 func (ws *WebSocket) Incoming() <-chan []byte { return ws.incoming }
 func (ws *WebSocket) Outgoing() chan<- []byte { return ws.outgoing }
+
+func (ws *WebSocket) Send(ctx context.Context, text string) {
+	select {
+	case ws.outgoing <- []byte(text):
+	case <-ctx.Done():
+	}
+}
+
+func (ws *WebSocket) SendJSON(ctx context.Context, v interface{}) error {
+	bytes, err := json.Marshal(v)
+	if err != nil {
+		return err
+	}
+
+	select {
+	case ws.outgoing <- bytes:
+	case <-ctx.Done():
+	}
+	return nil
+}
 
 func (ws *WebSocket) Close() <-chan struct{} {
 	select {
@@ -129,11 +151,11 @@ func (ws *WebSocket) writeMessage(msg []byte) error {
 func (ws *WebSocket) onClosed() {
 	listeners := ws.copyListeners()
 	for _, l := range listeners {
-		l.onWebSocketClosed(ws)
+		l.OnWebSocketClosed(ws)
 	}
 }
 
-func (ws *WebSocket) addListener(l webSocketListener) {
+func (ws *WebSocket) addListener(l WebSocketListener) {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
 
@@ -143,9 +165,16 @@ func (ws *WebSocket) addListener(l webSocketListener) {
 		}
 	}
 	ws.listeners = append(ws.listeners, l)
+
+	select {
+	case <-ws.closed:
+		l.OnWebSocketClosed(ws)
+	default:
+		l.OnWebSocketOpened(ws)
+	}
 }
 
-func (ws *WebSocket) removeListener(l webSocketListener) {
+func (ws *WebSocket) removeListener(l WebSocketListener) {
 	ws.mu.Lock()
 	defer ws.mu.Unlock()
 
@@ -158,14 +187,14 @@ func (ws *WebSocket) removeListener(l webSocketListener) {
 	ws.listeners = filtered
 }
 
-func (ws *WebSocket) copyListeners() []webSocketListener {
+func (ws *WebSocket) copyListeners() []WebSocketListener {
 	ws.mu.Lock()
 	if len(ws.listeners) == 0 {
 		ws.mu.Unlock()
 		return nil
 	}
 
-	listeners := make([]webSocketListener, len(ws.listeners))
+	listeners := make([]WebSocketListener, len(ws.listeners))
 	copy(listeners, ws.listeners)
 	ws.mu.Unlock()
 	return listeners

@@ -1,15 +1,11 @@
-package router
+package httpd
 
 import (
+	"bytes"
 	"context"
-	"errors"
+	"fmt"
 	"net/http"
 	"sync"
-)
-
-var (
-	ErrNotFound         = errors.New("router: Not found")
-	ErrMethodNotAllowed = errors.New("router: Method not allowed")
 )
 
 type Handler func(ctx context.Context, req *Req, resp *Resp) error
@@ -26,9 +22,11 @@ type Router struct {
 	mu     sync.Mutex
 	close  bool
 	closed chan struct{}
+
+	buffers sync.Pool // sync.Pool<bytes.Buffer>
 }
 
-func New() *Router {
+func NewRouter() *Router {
 	return &Router{
 		route:      NewRoute(),
 		streams:    make(map[*SSEStream]struct{}),
@@ -37,45 +35,62 @@ func New() *Router {
 	}
 }
 
-func (r *Router) ALL(p string, h Handler)               { r.route.ALL(p, h) }
-func (r *Router) HEAD(p string, h Handler)              { r.route.HEAD(p, h) }
-func (r *Router) GET(p string, h Handler)               { r.route.GET(p, h) }
-func (r *Router) POST(p string, h Handler)              { r.route.POST(p, h) }
-func (r *Router) PUT(p string, h Handler)               { r.route.PUT(p, h) }
-func (r *Router) DELETE(p string, h Handler)            { r.route.DELETE(p, h) }
+func (r *Router) ALL(p string, h Handler)        { r.route.ALL(p, h) }
+func (r *Router) HEAD(p string, h Handler)       { r.route.HEAD(p, h) }
+func (r *Router) GET(p string, h Handler)        { r.route.GET(p, h) }
+func (r *Router) POST(p string, h Handler)       { r.route.POST(p, h) }
+func (r *Router) PUT(p string, h Handler)        { r.route.PUT(p, h) }
+func (r *Router) DELETE(p string, h Handler)     { r.route.DELETE(p, h) }
+func (r *Router) Static(p string, root http.Dir) { r.route.Static(p, root) }
+
 func (r *Router) Add(p string, child *Route)            { r.route.Add(p, child) }
 func (r *Router) Handler(m string, p string, h Handler) { r.route.Handler(m, p, h) }
 func (r *Router) Middleware(p string, m Middleware)     { r.route.Middleware(p, m) }
 
-func (r *Router) ServeHTTP(w http.ResponseWriter, r0 *http.Request) {
-	middleware, handler, params, err := r.route.Match(r0.Method, r0.URL.Path)
+func (r *Router) ServeHTTP(w http.ResponseWriter, httpReq *http.Request) {
+	defer func() {
+		if e := recover(); e != nil {
+			// TODO: Log a panic
+			err, ok := e.(error)
+			if !ok {
+				err = fmt.Errorf("%v", err)
+			}
+			r.handleError(w, httpReq, err)
+		}
+	}()
+
+	middleware, handler, params, err := r.route.Match(httpReq.Method, httpReq.URL.Path)
 	if err != nil {
-		r.handleError(w, r0, err)
+		r.handleError(w, httpReq, err)
 		return
 	}
 
-	ctx := r0.Context()
-	req := newReq(r, r0, params)
-	resp := &Resp{w}
+	ctx := httpReq.Context()
+	req := newReq(r, httpReq, params)
+	resp := newResp(r, w)
 	if err := execute(ctx, middleware, handler, req, resp); err != nil {
-		r.handleError(w, r0, err)
+		r.handleError(w, httpReq, err)
 	}
 }
 
-func (r *Router) handleError(w http.ResponseWriter, r0 *http.Request, err error) {
+func (r *Router) handleError(w http.ResponseWriter, httpReq *http.Request, err error) {
 	switch err {
-	case ErrNotFound:
+	case ErrRouteNotFound:
 		if r.NotFoundHandler != nil {
-			r.NotFoundHandler.ServeHTTP(w, r0)
+			r.NotFoundHandler.ServeHTTP(w, httpReq)
 			return
 		}
-		http.NotFound(w, r0)
+		http.NotFound(w, httpReq)
 
 	case ErrMethodNotAllowed:
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-		return
 
 	default:
+		if bad, ok := err.(BadRequestError); ok {
+			http.Error(w, bad.Text, http.StatusBadRequest)
+			return
+		}
+
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 	}
 }
@@ -116,7 +131,7 @@ func (r *Router) closeAndWait() {
 
 // sseStreamListener
 
-func (r *Router) onSSEStreamOpened(s *SSEStream) {
+func (r *Router) OnSSEStreamOpened(s *SSEStream) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -128,7 +143,7 @@ func (r *Router) onSSEStreamOpened(s *SSEStream) {
 	r.streams[s] = struct{}{}
 }
 
-func (r *Router) onSSEStreamClosed(s *SSEStream) {
+func (r *Router) OnSSEStreamClosed(s *SSEStream) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -141,7 +156,7 @@ func (r *Router) onSSEStreamClosed(s *SSEStream) {
 
 // webSocketListener
 
-func (r *Router) onWebSocketOpened(ws *WebSocket) {
+func (r *Router) OnWebSocketOpened(ws *WebSocket) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -153,7 +168,7 @@ func (r *Router) onWebSocketOpened(ws *WebSocket) {
 	r.websockets[ws] = struct{}{}
 }
 
-func (r *Router) onWebSocketClosed(ws *WebSocket) {
+func (r *Router) OnWebSocketClosed(ws *WebSocket) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -174,4 +189,20 @@ func execute(ctx context.Context, middleware []Middleware, handler Handler, req 
 	return m(ctx, req, resp, func(ctx context.Context, req *Req, resp *Resp) error {
 		return execute(ctx, middleware, handler, req, resp)
 	})
+}
+
+// Buffers
+
+func (r *Router) getBuffer() *bytes.Buffer {
+	cached := r.buffers.Get()
+	if cached != nil {
+		return cached.(*bytes.Buffer)
+	}
+
+	return &bytes.Buffer{}
+}
+
+func (r *Router) releaseBuffer(buf *bytes.Buffer) {
+	buf.Reset()
+	r.buffers.Put(buf)
 }
