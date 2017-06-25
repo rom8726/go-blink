@@ -122,7 +122,16 @@ func (s *SSEStream) sendOrRecover(event sse.Event) (err error) {
 		}
 	}()
 
-	return sse.Encode(s.w, event)
+	if err := sse.Encode(s.w, event); err != nil {
+		return err
+	}
+
+	s.log.Debugf(s.ctx, "SSE sent an event")
+	flusher, ok := s.w.(http.Flusher)
+	if ok {
+		flusher.Flush()
+	}
+	return nil
 }
 
 func (s *SSEStream) onClosed() {
