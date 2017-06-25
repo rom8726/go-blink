@@ -102,7 +102,7 @@ func (ws *WebSocket) mainLoop() {
 	defer close(ws.incoming)
 	defer ws.conn.Close()
 
-	ws.log.Info(ws.ctx, "WS", ws.r.RequestURI)
+	ws.log.Infof(ws.ctx, "WS %v", ws.r.RequestURI)
 	defer ws.log.Debug(ws.ctx, "WS END")
 
 	for {

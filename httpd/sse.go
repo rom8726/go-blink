@@ -92,7 +92,7 @@ func (s *SSEStream) loop() {
 	defer s.onClosed()
 	defer close(s.closed)
 
-	s.log.Info(s.ctx, "SSE", s.r.RequestURI)
+	s.log.Infof(s.ctx, "SSE %v", s.r.RequestURI)
 	defer s.log.Debug(s.ctx, "SSE END")
 
 	for {

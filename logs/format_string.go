@@ -52,7 +52,7 @@ func (f *stringFormat) Format(ctx context.Context, msg message) string {
 		m["Message"] = fmt.Sprint(msg.Args...)
 	}
 
-	if len(f.ctx) > 0 {
+	if ctx != nil && len(f.ctx) > 0 {
 		var c map[string]interface{}
 		for key, param := range f.ctx {
 			val := ctx.Value(key)
@@ -69,7 +69,7 @@ func (f *stringFormat) Format(ctx context.Context, msg message) string {
 		}
 	}
 
-	if len(f.ctxAttrs) > 0 {
+	if ctx != nil && len(f.ctxAttrs) > 0 {
 		for key, param := range f.ctxAttrs {
 			val := ctx.Value(key)
 			if val == nil {

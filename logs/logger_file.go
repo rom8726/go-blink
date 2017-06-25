@@ -40,7 +40,7 @@ func (w *fileLogger) Log(ctx context.Context, msg message) {
 	}
 
 	s := w.format.Format(ctx, msg)
-	log.Output(4, s)
+	w.logger.Output(4, s)
 }
 
 func checkLogFile(name string) error {
