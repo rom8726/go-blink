@@ -10,12 +10,12 @@ const (
 	LoggerFile    LoggerType = "file"
 )
 
-// Logger writes log messages to a destination (a file, a console, etc.)
-type Logger interface {
+// logger writes log messages to a destination (a file, a console, etc.)
+type logger interface {
 	Log(ctx context.Context, message message)
 }
 
-func newLogger(config LoggerConfig, format Format) Logger {
+func newLogger(config LoggerConfig, format format) logger {
 	switch config.Type {
 	case LoggerDefault, LoggerConsole:
 		return newConsoleLogger(config, format)

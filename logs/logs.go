@@ -15,7 +15,7 @@ type Logs interface {
 }
 
 func New(config Config) Logs {
-	formats := map[string]Format{}
+	formats := map[string]format{}
 	for _, fc := range config.Formats {
 		if _, ok := formats[fc.Name]; ok {
 			panic("logs: Duplicate format \"" + fc.Name + "\"")
@@ -26,7 +26,7 @@ func New(config Config) Logs {
 		formats[""] = newDefaultFormat()
 	}
 
-	loggers := []Logger{}
+	loggers := []logger{}
 	for _, lc := range config.Loggers {
 		f := formats[lc.Format]
 		if f == nil {
@@ -47,8 +47,8 @@ func New(config Config) Logs {
 type logs struct {
 	mu      sync.Mutex
 	logs    map[string]Log
-	loggers []Logger
-	formats map[string]Format
+	loggers []logger
+	formats map[string]format
 }
 
 func (logs *logs) Log(name string) Log {

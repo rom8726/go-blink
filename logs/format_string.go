@@ -15,7 +15,7 @@ type stringFormat struct {
 	ctxAttrs   map[string]string // ${Context.Attr} represented as map<"Attr", "Context.Attr">.
 }
 
-func newStringFormat(config FormatConfig) Format {
+func newStringFormat(config FormatConfig) format {
 	f := str.NewFormatter(config.Message)
 
 	ctxAttrs := map[string]string{}

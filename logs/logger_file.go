@@ -10,11 +10,11 @@ import (
 // fileLogger logs messages to files and rotates the files.
 type fileLogger struct {
 	level  Level
-	format Format
+	format format
 	logger *log.Logger
 }
 
-func newFileLogger(config LoggerConfig, format Format) *fileLogger {
+func newFileLogger(config LoggerConfig, format format) *fileLogger {
 	if err := checkLogFile(config.File); err != nil {
 		log.Fatal(err)
 	}

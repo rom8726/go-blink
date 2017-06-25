@@ -8,10 +8,10 @@ import (
 // consoleLogger logs messages to the default golang log.
 type consoleLogger struct {
 	level  Level
-	format Format
+	format format
 }
 
-func newConsoleLogger(config LoggerConfig, format Format) *consoleLogger {
+func newConsoleLogger(config LoggerConfig, format format) *consoleLogger {
 	return &consoleLogger{
 		level:  config.Level,
 		format: format,

@@ -16,12 +16,12 @@ const (
 	DefaultTimeFormat = "2006/01/02 15:04:05"
 )
 
-// Format formats a log message into a string.
-type Format interface {
+// format formats a log message into a string.
+type format interface {
 	Format(ctx context.Context, message message) string
 }
 
-func newFormat(config FormatConfig) Format {
+func newFormat(config FormatConfig) format {
 	switch config.Type {
 	case FormatDefault, FormatString:
 		return newStringFormat(config)
@@ -31,7 +31,7 @@ func newFormat(config FormatConfig) Format {
 	return nil
 }
 
-func newDefaultFormat() Format {
+func newDefaultFormat() format {
 	return newStringFormat(FormatConfig{
 		Message: DefaultFormat,
 		Time:    DefaultTimeFormat,
