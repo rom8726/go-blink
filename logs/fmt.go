@@ -11,14 +11,9 @@ const (
 	FormatString  FormatType = "string"
 )
 
-const (
-	DefaultFormat     = "${Level}\t${Log}\t${Message}"
-	DefaultTimeFormat = "2006/01/02 15:04:05"
-)
-
-// format formats a log message into a string.
+// format formats a Record and returns a record.
 type format interface {
-	Format(ctx context.Context, message message) string
+	format(ctx context.Context, message Record) string
 }
 
 func newFormat(config FormatConfig) format {
@@ -34,6 +29,5 @@ func newFormat(config FormatConfig) format {
 func newDefaultFormat() format {
 	return newStringFormat(FormatConfig{
 		Message: DefaultFormat,
-		Time:    DefaultTimeFormat,
 	})
 }

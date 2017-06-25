@@ -14,41 +14,42 @@ type Logs interface {
 	Log(name string) Log
 }
 
+type logs struct {
+	mu      sync.Mutex
+	logs    map[string]Log
+	writers []writer
+	formats map[string]format
+}
+
 func New(config Config) Logs {
 	formats := map[string]format{}
-	for _, fc := range config.Formats {
-		if _, ok := formats[fc.Name]; ok {
-			panic("logs: Duplicate format \"" + fc.Name + "\"")
+	for _, fconf := range config.Formats {
+		if _, ok := formats[fconf.Name]; ok {
+			panic("logs: Duplicate format \"" + fconf.Name + "\"")
 		}
-		formats[fc.Name] = newFormat(fc)
+
+		formats[fconf.Name] = newFormat(fconf)
 	}
 	if _, ok := formats[""]; !ok {
 		formats[""] = newDefaultFormat()
 	}
 
-	loggers := []logger{}
-	for _, lc := range config.Loggers {
-		f := formats[lc.Format]
-		if f == nil {
-			panic("logs: Undefined format \"" + lc.Format + "\"")
+	writers := []writer{}
+	for _, wconf := range config.Writers {
+		fmt := formats[wconf.Format]
+		if fmt == nil {
+			panic("logs: Unknown format \"" + wconf.Format + "\"")
 		}
 
-		l := newLogger(lc, f)
-		loggers = append(loggers, l)
+		writer := newWriter(wconf, fmt)
+		writers = append(writers, writer)
 	}
 
 	return &logs{
 		logs:    make(map[string]Log),
 		formats: formats,
-		loggers: loggers,
+		writers: writers,
 	}
-}
-
-type logs struct {
-	mu      sync.Mutex
-	logs    map[string]Log
-	loggers []logger
-	formats map[string]format
 }
 
 func (logs *logs) Log(name string) Log {

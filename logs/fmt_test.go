@@ -9,15 +9,14 @@ import (
 
 func TestStringFormat_Format(t *testing.T) {
 	f := newStringFormat(FormatConfig{
-		Message: "${Time} ${Context.ID} ${Level} ${Log} ${Message} ${Context}",
-		Context: map[string]string{"UserId": "u"},
+		Message: "${Time} ${Level} ${Write} ${Message} ${Context}",
+		Context: map[string]string{"ID": "id"},
 	})
 
 	ctx := context.Background()
 	ctx = context.WithValue(ctx, "ID", "22fefb70-1cb6-4e3d")
-	ctx = context.WithValue(ctx, "UserId", 1)
 
-	message := f.Format(ctx, message{
+	message := f.format(ctx, Record{
 		Log:    "test",
 		Time:   time.Time{},
 		Level:  LevelInfo,
@@ -25,5 +24,5 @@ func TestStringFormat_Format(t *testing.T) {
 		Args:   []interface{}{"John Doe"},
 	})
 
-	assert.Equal(t, "0001/01/01 00:00:00 22fefb70-1cb6-4e3d INFO test Hello John Doe map[u:1]", message)
+	assert.Equal(t, "0001-01-01 00:00:00 INFO test Hello John Doe map[id:22fefb70-1cb6-4e3d]", message)
 }

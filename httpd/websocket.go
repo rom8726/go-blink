@@ -93,7 +93,7 @@ func (ws *WebSocket) Close() <-chan struct{} {
 func (ws *WebSocket) mainLoop() {
 	defer func() {
 		if err := recover(); err != nil {
-			ws.log.Panic(ws.ctx, "Panic in a WebSocket main loop", err)
+			ws.log.Stack(ws.ctx, "Stack in a WebSocket main loop", err)
 		}
 	}()
 
@@ -122,7 +122,7 @@ func (ws *WebSocket) readLoop() {
 	defer func() {
 		ws.Close()
 		if err := recover(); err != nil {
-			ws.log.Panic(ws.ctx, "WebSocket panic in a read loop", err)
+			ws.log.Stack(ws.ctx, "WebSocket panic in a read loop", err)
 		}
 	}()
 
@@ -143,7 +143,7 @@ func (ws *WebSocket) readLoop() {
 func (ws *WebSocket) sendMessageOrRecover(msg []byte) (err error) {
 	defer func() {
 		if e := recover(); e != nil {
-			ws.log.Panic(ws.ctx, "Panic in an SSEStream send method", e)
+			ws.log.Stack(ws.ctx, "Stack in an SSEStream send method", e)
 			err = errs.Recovered(e)
 		}
 	}()

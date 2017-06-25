@@ -85,7 +85,7 @@ func (s *SSEStream) SendJSON(ctx context.Context, v interface{}) error {
 func (s *SSEStream) loop() {
 	defer func() {
 		if err := recover(); err != nil {
-			s.log.Panic(s.ctx, "Panic in an SSEStream loop", err)
+			s.log.Stack(s.ctx, "Stack in an SSEStream loop", err)
 		}
 	}()
 
@@ -117,7 +117,7 @@ func (s *SSEStream) loop() {
 func (s *SSEStream) sendOrRecover(event sse.Event) (err error) {
 	defer func() {
 		if e := recover(); e != nil {
-			s.log.Panic(s.ctx, "Panic in an SSEStream send method", e)
+			s.log.Stack(s.ctx, "Stack in an SSEStream send method", e)
 			err = errs.Recovered(e)
 		}
 	}()

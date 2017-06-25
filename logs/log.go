@@ -9,26 +9,34 @@ import (
 )
 
 type Log interface {
+	Print(ctx context.Context, level Level, v ...interface{})
+	Printf(ctx context.Context, level Level, f string, v ...interface{})
+
 	Trace(ctx context.Context, v ...interface{})
-	Tracef(ctx context.Context, format string, v ...interface{})
+	Tracef(ctx context.Context, f string, v ...interface{})
 
 	Debug(ctx context.Context, v ...interface{})
-	Debugf(ctx context.Context, format string, v ...interface{})
+	Debugf(ctx context.Context, f string, v ...interface{})
 
 	Info(ctx context.Context, v ...interface{})
-	Infof(ctx context.Context, format string, v ...interface{})
+	Infof(ctx context.Context, f string, v ...interface{})
 
 	Warn(ctx context.Context, v ...interface{})
-	Warnf(ctx context.Context, format string, v ...interface{})
+	Warnf(ctx context.Context, f string, v ...interface{})
 
 	Error(ctx context.Context, v ...interface{})
-	Errorf(ctx context.Context, format string, v ...interface{})
+	Errorf(ctx context.Context, f string, v ...interface{})
 
-	Panic(ctx context.Context, v ...interface{})
-	Panicf(ctx context.Context, format string, v ...interface{})
+	Stack(ctx context.Context, v ...interface{})
+	Stackf(ctx context.Context, f string, v ...interface{})
 
 	Fatal(ctx context.Context, v ...interface{})
-	Fatalf(ctx context.Context, format string, v ...interface{})
+	Fatalf(ctx context.Context, f string, v ...interface{})
+}
+
+type logImpl struct {
+	logs *logs
+	name string
 }
 
 func newLog(logs *logs, name string) Log {
@@ -38,22 +46,25 @@ func newLog(logs *logs, name string) Log {
 	}
 }
 
-type logImpl struct {
-	logs *logs
-	name string
-}
-
 func (l *logImpl) printf(ctx context.Context, level Level, format string, v ...interface{}) {
-	msg := message{
+	record := Record{
 		Log:    l.name,
 		Time:   time.Now(),
 		Level:  level,
 		Format: format,
 		Args:   v,
 	}
-	for _, w := range l.logs.loggers {
-		w.Log(ctx, msg)
+	for _, w := range l.logs.writers {
+		w.Write(ctx, record)
 	}
+}
+
+func (l *logImpl) Print(ctx context.Context, level Level, v ...interface{}) {
+	l.printf(ctx, level, "", v...)
+}
+
+func (l *logImpl) Printf(ctx context.Context, level Level, format string, v ...interface{}) {
+	l.printf(ctx, level, format, v...)
 }
 
 func (l *logImpl) Trace(ctx context.Context, v ...interface{}) {
@@ -96,18 +107,18 @@ func (l *logImpl) Errorf(ctx context.Context, f string, v ...interface{}) {
 	l.printf(ctx, LevelWarn, f, v...)
 }
 
-func (l *logImpl) Panic(ctx context.Context, v ...interface{}) {
+func (l *logImpl) Stack(ctx context.Context, v ...interface{}) {
 	msg := fmt.Sprint(v...)
 	msg += "\n"
 	msg += string(debug.Stack())
 	l.printf(ctx, LevelError, "", msg)
 }
 
-func (l *logImpl) Panicf(ctx context.Context, f string, v ...interface{}) {
+func (l *logImpl) Stackf(ctx context.Context, f string, v ...interface{}) {
 	msg := fmt.Sprintf(f, v...)
 	msg += "\n"
 	msg += string(debug.Stack())
-	l.printf(ctx, LevelError, "", msg)
+	l.printf(ctx, LevelError, f, msg)
 }
 
 func (l *logImpl) Fatal(ctx context.Context, v ...interface{}) {
@@ -115,31 +126,7 @@ func (l *logImpl) Fatal(ctx context.Context, v ...interface{}) {
 	os.Exit(1)
 }
 
-func (l *logImpl) Fatalf(ctx context.Context, format string, v ...interface{}) {
-	l.printf(ctx, LevelError, format, v...)
+func (l *logImpl) Fatalf(ctx context.Context, f string, v ...interface{}) {
+	l.printf(ctx, LevelError, f, v...)
 	os.Exit(1)
 }
-
-type emptyLog int
-
-func (emptyLog) Trace(ctx context.Context, v ...interface{})            {}
-func (emptyLog) Tracef(ctx context.Context, f string, v ...interface{}) {}
-func (emptyLog) Debug(ctx context.Context, v ...interface{})            {}
-func (emptyLog) Debugf(ctx context.Context, f string, v ...interface{}) {}
-func (emptyLog) Info(ctx context.Context, v ...interface{})             {}
-func (emptyLog) Infof(ctx context.Context, f string, v ...interface{})  {}
-func (emptyLog) Warn(ctx context.Context, v ...interface{})             {}
-func (emptyLog) Warnf(ctx context.Context, f string, v ...interface{})  {}
-func (emptyLog) Error(ctx context.Context, v ...interface{})            {}
-func (emptyLog) Errorf(ctx context.Context, f string, v ...interface{}) {}
-func (emptyLog) Panic(ctx context.Context, v ...interface{})            {}
-func (emptyLog) Panicf(ctx context.Context, f string, v ...interface{}) {}
-
-func (emptyLog) Fatal(ctx context.Context, v ...interface{}) {
-	os.Exit(1)
-}
-func (emptyLog) Fatalf(ctx context.Context, f string, v ...interface{}) {
-	os.Exit(1)
-}
-
-var EmptyLog Log = emptyLog(0)

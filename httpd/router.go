@@ -51,7 +51,7 @@ func (r *Router) ServeHTTP(w http.ResponseWriter, httpReq *http.Request) {
 	defer func() {
 		if err := recover(); err != nil {
 			if r.log != nil {
-				r.log.Panic(ctx, err)
+				r.log.Stack(ctx, err)
 			}
 			http.Error(w, "Internal server error", http.StatusInternalServerError)
 		}

@@ -2,8 +2,9 @@ package logs
 
 import "time"
 
-type message struct {
-	Log    string        // Log name.
+// Record is a log request.
+type Record struct {
+	Log    string        // Write name.
 	Time   time.Time     // Creation time.
 	Level  Level         // Message level.
 	Format string        // Optional format string.
