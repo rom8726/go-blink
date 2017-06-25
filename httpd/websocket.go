@@ -4,27 +4,26 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/gorilla/websocket"
+	"github.com/ivankorobkov/go-blink/errs"
+	"github.com/ivankorobkov/go-blink/logs"
 	"net/http"
 	"sync"
-	"time"
 )
 
 type WebSocket struct {
-	mu        sync.Mutex
-	conn      *websocket.Conn
-	listeners []WebSocketListener
+	ctx  context.Context
+	log  logs.Log
+	r    *http.Request
+	conn *websocket.Conn
 
 	close  chan struct{}
 	closed chan struct{}
 
 	incoming chan []byte
 	outgoing chan []byte
-}
 
-type WebSocketOptions struct {
-	PingTime        time.Duration
-	ReadBufferSize  int
-	WriteBufferSize int
+	mu        sync.Mutex // Guards listeners.
+	listeners []WebSocketListener
 }
 
 type WebSocketListener interface {
@@ -32,7 +31,7 @@ type WebSocketListener interface {
 	OnWebSocketClosed(ws *WebSocket)
 }
 
-func NewWebSocket(w http.ResponseWriter, r *http.Request, opts *WebSocketOptions) (*WebSocket, error) {
+func NewWebSocket(ctx context.Context, log logs.Log, w http.ResponseWriter, r *http.Request) (*WebSocket, error) {
 	var upgrader = websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
@@ -44,6 +43,9 @@ func NewWebSocket(w http.ResponseWriter, r *http.Request, opts *WebSocketOptions
 	}
 
 	ws := &WebSocket{
+		ctx:      ctx,
+		log:      log,
+		r:        r,
 		conn:     conn,
 		close:    make(chan struct{}, 1),
 		closed:   make(chan struct{}),
@@ -51,7 +53,6 @@ func NewWebSocket(w http.ResponseWriter, r *http.Request, opts *WebSocketOptions
 		outgoing: make(chan []byte, 8),
 	}
 
-	go ws.mainLoop()
 	go ws.mainLoop()
 	go ws.readLoop()
 	return ws, nil
@@ -89,21 +90,48 @@ func (ws *WebSocket) Close() <-chan struct{} {
 	return ws.closed
 }
 
-func (ws *WebSocket) readLoop() {
+func (ws *WebSocket) mainLoop() {
 	defer func() {
 		if err := recover(); err != nil {
-			ws.Close()
-			// TODO: Log a panic.
+			ws.log.Panic(ws.ctx, "Panic in a WebSocket main loop", err)
+		}
+	}()
+
+	defer ws.onClosed()
+	defer close(ws.closed)
+	defer close(ws.incoming)
+	defer ws.conn.Close()
+
+	ws.log.Info(ws.ctx, "WS", ws.r.RequestURI)
+	defer ws.log.Debug(ws.ctx, "WS END")
+
+	for {
+		select {
+		case <-ws.close:
+			return
+		case msg := <-ws.outgoing:
+			if err := ws.sendMessageOrRecover(msg); err != nil {
+				ws.log.Debug(ws.ctx, "WebSocket failed to send a message", err)
+				return
+			}
+		}
+	}
+}
+
+func (ws *WebSocket) readLoop() {
+	defer func() {
+		ws.Close()
+		if err := recover(); err != nil {
+			ws.log.Panic(ws.ctx, "WebSocket panic in a read loop", err)
 		}
 	}()
 
 	for {
 		_, msg, err := ws.conn.ReadMessage()
 		if err != nil {
-			// TODO: Log a read error.
 			return
 		}
-		// TODO: Log an incoming message.
+		ws.log.Debugf(ws.ctx, "WebSocket incoming message, len=%d", len(msg))
 
 		select {
 		case ws.incoming <- msg:
@@ -112,31 +140,14 @@ func (ws *WebSocket) readLoop() {
 	}
 }
 
-func (ws *WebSocket) mainLoop() {
+func (ws *WebSocket) sendMessageOrRecover(msg []byte) (err error) {
 	defer func() {
-		if err := recover(); err != nil {
-			// TODO: Log a panic.
+		if e := recover(); e != nil {
+			ws.log.Panic(ws.ctx, "Panic in an SSEStream send method", e)
+			err = errs.Recovered(e)
 		}
 	}()
 
-	defer ws.onClosed()
-	defer close(ws.closed)
-	defer ws.conn.Close()
-
-	for {
-		select {
-		case <-ws.close:
-			return
-		case msg := <-ws.outgoing:
-			if err := ws.writeMessage(msg); err != nil {
-				// TODO: Log a write error.
-				return
-			}
-		}
-	}
-}
-
-func (ws *WebSocket) writeMessage(msg []byte) error {
 	w, err := ws.conn.NextWriter(websocket.TextMessage)
 	if err != nil {
 		return err
@@ -144,7 +155,7 @@ func (ws *WebSocket) writeMessage(msg []byte) error {
 	defer w.Close()
 
 	_, err = w.Write(msg)
-	// TODO: Log an outgoing message.
+	ws.log.Debugf(ws.ctx, "WebSocket sent a message, len=%d", len(msg))
 	return err
 }
 

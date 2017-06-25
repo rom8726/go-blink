@@ -3,21 +3,25 @@ package httpd
 import (
 	"context"
 	"encoding/json"
+	"github.com/ivankorobkov/go-blink/errs"
+	"github.com/ivankorobkov/go-blink/logs"
 	"github.com/manucorporat/sse"
 	"net/http"
 	"sync"
 )
 
 type SSEStream struct {
-	mu        sync.Mutex
-	listeners []SSEStreamListener
+	ctx context.Context
+	log logs.Log
+	r   *http.Request
+	w   http.ResponseWriter
 
 	close    chan struct{}
 	closed   chan struct{}
 	outgoing chan sse.Event
 
-	r *http.Request
-	w http.ResponseWriter
+	mu        sync.Mutex
+	listeners []SSEStreamListener
 }
 
 type SSEStreamListener interface {
@@ -25,7 +29,7 @@ type SSEStreamListener interface {
 	OnSSEStreamClosed(s *SSEStream)
 }
 
-func NewSSEStream(w http.ResponseWriter, r *http.Request) (*SSEStream, error) {
+func NewSSEStream(ctx context.Context, log logs.Log, w http.ResponseWriter, r *http.Request) (*SSEStream, error) {
 	w.Header().Set("Content-Type", sse.ContentType)
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
@@ -35,11 +39,13 @@ func NewSSEStream(w http.ResponseWriter, r *http.Request) (*SSEStream, error) {
 	}
 
 	stream := &SSEStream{
+		ctx:      ctx,
+		log:      log,
+		r:        r,
+		w:        w,
 		close:    make(chan struct{}, 1),
 		closed:   make(chan struct{}),
 		outgoing: make(chan sse.Event, 8),
-		r:        r,
-		w:        w,
 	}
 	go stream.loop()
 	return stream, nil
@@ -77,8 +83,17 @@ func (s *SSEStream) SendJSON(ctx context.Context, v interface{}) error {
 }
 
 func (s *SSEStream) loop() {
+	defer func() {
+		if err := recover(); err != nil {
+			s.log.Panic(s.ctx, "Panic in an SSEStream loop", err)
+		}
+	}()
+
 	defer s.onClosed()
 	defer close(s.closed)
+
+	s.log.Info(s.ctx, "SSE", s.r.RequestURI)
+	defer s.log.Debug(s.ctx, "SSE END")
 
 	for {
 		select {
@@ -91,12 +106,23 @@ func (s *SSEStream) loop() {
 				return
 			}
 
-			if err := sse.Encode(s.w, event); err != nil {
-				// TODO: Log an error
+			if err := s.sendOrRecover(event); err != nil {
+				s.log.Debug(s.ctx, "Failed to write an SSE event", err)
 				return
 			}
 		}
 	}
+}
+
+func (s *SSEStream) sendOrRecover(event sse.Event) (err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			s.log.Panic(s.ctx, "Panic in an SSEStream send method", e)
+			err = errs.Recovered(e)
+		}
+	}()
+
+	return sse.Encode(s.w, event)
 }
 
 func (s *SSEStream) onClosed() {

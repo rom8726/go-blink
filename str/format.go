@@ -134,7 +134,7 @@ func parseFormatNodes(s string) []formatNode {
 			nodes = append(nodes, formatNode{false, before})
 		}
 
-		param := s[start+2:end]
+		param := s[start+2 : end]
 		nodes = append(nodes, formatNode{true, param})
 		s = s[end+1:]
 	}

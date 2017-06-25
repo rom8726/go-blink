@@ -1,6 +1,7 @@
 package httpd
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/url"
@@ -40,12 +41,8 @@ func (r *Req) DecodeJSON(dst interface{}) error {
 	return nil
 }
 
-func (r *Req) WebSocket(resp *Resp) (*WebSocket, error) {
-	return r.WebSocketOptions(resp, nil)
-}
-
-func (r *Req) WebSocketOptions(resp *Resp, opts *WebSocketOptions) (*WebSocket, error) {
-	ws, err := NewWebSocket(resp.ResponseWriter, r.Request, opts)
+func (r *Req) WebSocket(ctx context.Context, resp *Resp) (*WebSocket, error) {
+	ws, err := NewWebSocket(ctx, r.Router.log, resp.ResponseWriter, r.Request)
 	if err != nil {
 		return nil, NewBadRequestError(err.Error())
 	}
@@ -54,8 +51,8 @@ func (r *Req) WebSocketOptions(resp *Resp, opts *WebSocketOptions) (*WebSocket, 
 	return ws, nil
 }
 
-func (r *Req) SSE(resp *Resp) (*SSEStream, error) {
-	stream, err := NewSSEStream(resp.ResponseWriter, r.Request)
+func (r *Req) SSEStream(ctx context.Context, resp *Resp) (*SSEStream, error) {
+	stream, err := NewSSEStream(ctx, r.Router.log, resp.ResponseWriter, r.Request)
 	if err != nil {
 		return nil, NewBadRequestError(err.Error())
 	}

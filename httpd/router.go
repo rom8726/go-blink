@@ -3,7 +3,7 @@ package httpd
 import (
 	"bytes"
 	"context"
-	"fmt"
+	"github.com/ivankorobkov/go-blink/logs"
 	"net/http"
 	"sync"
 )
@@ -12,9 +12,7 @@ type Handler func(ctx context.Context, req *Req, resp *Resp) error
 type Middleware func(ctx context.Context, req *Req, resp *Resp, next Handler) error
 
 type Router struct {
-	NotFoundHandler      http.Handler
-	InternalErrorHandler http.Handler
-
+	log        logs.Log
 	route      *Route
 	streams    map[*SSEStream]struct{}
 	websockets map[*WebSocket]struct{}
@@ -26,8 +24,9 @@ type Router struct {
 	buffers sync.Pool // sync.Pool<bytes.Buffer>
 }
 
-func NewRouter() *Router {
+func NewRouter(log logs.Log) *Router {
 	return &Router{
+		log:        log,
 		route:      NewRoute(),
 		streams:    make(map[*SSEStream]struct{}),
 		websockets: make(map[*WebSocket]struct{}),
@@ -48,38 +47,32 @@ func (r *Router) Handler(m string, p string, h Handler) { r.route.Handler(m, p, 
 func (r *Router) Middleware(p string, m Middleware)     { r.route.Middleware(p, m) }
 
 func (r *Router) ServeHTTP(w http.ResponseWriter, httpReq *http.Request) {
+	ctx := httpReq.Context()
 	defer func() {
-		if e := recover(); e != nil {
-			// TODO: Log a panic
-			err, ok := e.(error)
-			if !ok {
-				err = fmt.Errorf("%v", err)
+		if err := recover(); err != nil {
+			if r.log != nil {
+				r.log.Panic(ctx, err)
 			}
-			r.handleError(w, httpReq, err)
+			http.Error(w, "Internal server error", http.StatusInternalServerError)
 		}
 	}()
 
 	middleware, handler, params, err := r.route.Match(httpReq.Method, httpReq.URL.Path)
 	if err != nil {
-		r.handleError(w, httpReq, err)
+		r.handleError(ctx, w, httpReq, err)
 		return
 	}
 
-	ctx := httpReq.Context()
 	req := newReq(r, httpReq, params)
 	resp := newResp(r, w)
 	if err := execute(ctx, middleware, handler, req, resp); err != nil {
-		r.handleError(w, httpReq, err)
+		r.handleError(ctx, w, httpReq, err)
 	}
 }
 
-func (r *Router) handleError(w http.ResponseWriter, httpReq *http.Request, err error) {
+func (r *Router) handleError(ctx context.Context, w http.ResponseWriter, httpReq *http.Request, err error) {
 	switch err {
 	case ErrRouteNotFound:
-		if r.NotFoundHandler != nil {
-			r.NotFoundHandler.ServeHTTP(w, httpReq)
-			return
-		}
 		http.NotFound(w, httpReq)
 
 	case ErrMethodNotAllowed:
@@ -92,6 +85,9 @@ func (r *Router) handleError(w http.ResponseWriter, httpReq *http.Request, err e
 		}
 
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		if r.log != nil {
+			r.log.Error(ctx, "Internal server error", err)
+		}
 	}
 }
 
@@ -134,7 +130,6 @@ func (r *Router) closeAndWait() {
 func (r *Router) OnSSEStreamOpened(s *SSEStream) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
 	if r.close {
 		s.Close()
 		return
@@ -146,7 +141,6 @@ func (r *Router) OnSSEStreamOpened(s *SSEStream) {
 func (r *Router) OnSSEStreamClosed(s *SSEStream) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
 	if r.close {
 		return
 	}
@@ -159,7 +153,6 @@ func (r *Router) OnSSEStreamClosed(s *SSEStream) {
 func (r *Router) OnWebSocketOpened(ws *WebSocket) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
 	if r.close {
 		ws.Close()
 		return
@@ -171,7 +164,6 @@ func (r *Router) OnWebSocketOpened(ws *WebSocket) {
 func (r *Router) OnWebSocketClosed(ws *WebSocket) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
-
 	if r.close {
 		return
 	}
