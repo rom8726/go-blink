@@ -15,18 +15,6 @@ type Logger interface {
 	Log(ctx context.Context, message message)
 }
 
-type LoggerConfig struct {
-	Type   LoggerType
-	Level  Level
-	Format string
-
-	// File logger
-	File           string
-	FileMaxSize    int // Maximum size in megabytes of a log file.
-	FileMaxAge     int // Maximum number of days to retain old log files.
-	FileMaxBackups int // Maximum number of old log files to retain.
-}
-
 func newLogger(config LoggerConfig, format Format) Logger {
 	switch config.Type {
 	case LoggerDefault, LoggerConsole:

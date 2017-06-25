@@ -1,25 +1,17 @@
 package logs
 
-import "sync"
+import (
+	"github.com/ivankorobkov/di"
+	"sync"
+)
+
+func Module(m *di.Module) {
+	m.MarkPackageDep(Config{})
+	m.AddConstructor(New)
+}
 
 type Logs interface {
 	Log(name string) Log
-}
-
-type Config struct {
-	Formats []FormatConfig
-	Loggers []LoggerConfig
-}
-
-func NewConfig() Config {
-	return Config{
-		Loggers: []LoggerConfig{
-			LoggerConfig{
-				Type:  LoggerConsole,
-				Level: LevelInfo,
-			},
-		},
-	}
 }
 
 func New(config Config) Logs {

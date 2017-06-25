@@ -21,14 +21,6 @@ type Format interface {
 	Format(ctx context.Context, message message) string
 }
 
-type FormatConfig struct {
-	Name    string
-	Type    FormatType
-	Message string
-	Time    string
-	Context map[string]string // Map of context keys to param names
-}
-
 func newFormat(config FormatConfig) Format {
 	switch config.Type {
 	case FormatDefault, FormatString:
