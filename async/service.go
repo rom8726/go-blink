@@ -11,9 +11,11 @@ type Service interface {
 	Stopper
 }
 
+type ServiceLoop func(ctx context.Context, started chan<- struct{}) error
+
 // Start creates a new service, starts it and returns it.
-func Start(run func(ctx context.Context, started chan<- struct{}) error) Service {
-	s := NewService(run)
+func Start(loop ServiceLoop) Service {
+	s := NewService(loop)
 	s.Start()
 	return s
 }
@@ -22,21 +24,36 @@ func Start(run func(ctx context.Context, started chan<- struct{}) error) Service
 // When started, the service creates a goroutine for the run loop.
 // The service does not support restarts.
 // It is safe to call all the methods in any order.
-func NewService(run func(ctx context.Context, started chan<- struct{}) error) Service {
-	if run == nil {
-		panic("async: nil run")
+func NewService(loops ... ServiceLoop) Service {
+	if len(loops) == 0 {
+		panic("async: empty service loops")
+	}
+	if len(loops) == 1 {
+		return newService(loops[0])
+	}
+
+	services := make([]Service, len(loops))
+	for i, loop := range loops {
+		services[i] = newService(loop)
+	}
+	return Group(services...)
+}
+
+func newService(loop ServiceLoop) Service {
+	if loop == nil {
+		panic("async: nil service loop")
 	}
 
 	return &service{
-		run:     run,
+		loop:    loop,
 		started: make(chan struct{}),
 		stopped: make(chan struct{}),
 	}
 }
 
 type service struct {
-	run func(ctx context.Context, started chan<- struct{}) error
-	mu  sync.Mutex
+	loop ServiceLoop
+	mu   sync.Mutex
 
 	// Guarded by mu.
 	ctx      context.Context    // Context is created when the service is started.
@@ -101,7 +118,7 @@ func (s *service) main(ctx context.Context, started chan struct{}, stopped chan<
 	defer close(stopped)
 	defer closeOrDefault(started)
 
-	err := s.run(ctx, started)
+	err := s.loop(ctx, started)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
