@@ -26,3 +26,13 @@ type Stopper interface {
 	// Returns the stop error.
 	StopError() error
 }
+
+func StartAndWait(s Starter) error {
+	<-s.Start()
+	return s.StartError()
+}
+
+func StopAndWait(s Stopper) error {
+	<-s.Stop()
+	return s.StopError()
+}
