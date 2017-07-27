@@ -24,7 +24,7 @@ func Start(loop ServiceLoop) Service {
 // When started, the service creates a goroutine for the run loop.
 // The service does not support restarts.
 // It is safe to call all the methods in any order.
-func NewService(loops ... ServiceLoop) Service {
+func NewService(loops ...ServiceLoop) Service {
 	if len(loops) == 0 {
 		panic("async: empty service loops")
 	}
@@ -88,6 +88,11 @@ func (s *service) StartError() error {
 	return s.startErr
 }
 
+func (s *service) StartAndWait() error {
+	<-s.Start()
+	return s.StartError()
+}
+
 func (s *service) Stop() <-chan struct{} {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -112,6 +117,11 @@ func (s *service) StopError() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.stopErr
+}
+
+func (s *service) StopAndWait() error {
+	<-s.Stop()
+	return s.StopError()
 }
 
 func (s *service) main(ctx context.Context, started chan struct{}, stopped chan<- struct{}) {

@@ -7,6 +7,9 @@ type Starter interface {
 	// The method can be called multiple times, but the service starts only once.
 	Start() <-chan struct{}
 
+	// StartAndWait starts a service and waits until it starts.
+	StartAndWait() error
+
 	// Started returns a channel which is closed when the service starts or fails to start.
 	Started() <-chan struct{}
 
@@ -20,19 +23,12 @@ type Stopper interface {
 	// The method can be called multiple time.
 	Stop() <-chan struct{}
 
+	// StopAndWait stops a service and waits until it starts.
+	StopAndWait() error
+
 	// Stopped returns a channel which is closed when the service stops.
 	Stopped() <-chan struct{}
 
 	// Returns the stop error.
 	StopError() error
-}
-
-func StartAndWait(s Starter) error {
-	<-s.Start()
-	return s.StartError()
-}
-
-func StopAndWait(s Stopper) error {
-	<-s.Stop()
-	return s.StopError()
 }
