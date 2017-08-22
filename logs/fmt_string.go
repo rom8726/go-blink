@@ -1,10 +1,18 @@
 package logs
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"github.com/ivankorobkov/go-blink/strs"
+	"sync"
 )
+
+var fmtPool = sync.Pool{
+	New: func() interface{} {
+		return &bytes.Buffer{}
+	},
+}
 
 // stringFormat formats a Record into a human readable UTF-8 string using named ${Level} placeholders.
 type stringFormat struct {
@@ -51,7 +59,7 @@ func (f *stringFormat) formatMessage(ctx context.Context, record Record) string 
 	return fmt.Sprint(record.Args...)
 }
 
-func (f *stringFormat) formatContext(ctx context.Context, record Record) interface{} {
+func (f *stringFormat) formatContext(ctx context.Context, record Record) string {
 	if ctx == nil {
 		return ""
 	}
@@ -59,21 +67,29 @@ func (f *stringFormat) formatContext(ctx context.Context, record Record) interfa
 		return ""
 	}
 
-	var result map[string]interface{}
+	var buf *bytes.Buffer
 	for key, param := range f.ctx {
 		val := ctx.Value(key)
 		if val == nil {
 			continue
 		}
 
-		if result == nil {
-			result = make(map[string]interface{})
+		if buf == nil {
+			buf = fmtPool.Get().(*bytes.Buffer)
+		} else {
+			buf.WriteString(" ")
 		}
-		result[param] = val
-	}
 
-	if result == nil {
+		buf.WriteString(param)
+		buf.WriteString("=")
+		buf.WriteString(fmt.Sprint(val))
+	}
+	if buf == nil {
 		return ""
 	}
+
+	result := buf.String()
+	buf.Reset()
+	fmtPool.Put(buf)
 	return result
 }
