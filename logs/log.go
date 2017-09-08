@@ -54,7 +54,7 @@ func (l *logImpl) printf(ctx context.Context, level Level, format string, v ...i
 		Format: format,
 		Args:   v,
 	}
-	for _, w := range l.logs.writers {
+	for _, w := range l.logs.loggers {
 		w.Write(ctx, record)
 	}
 }

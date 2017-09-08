@@ -39,6 +39,19 @@ func (level Level) String() string {
 	return levelToName[level]
 }
 
+func (level Level) MarshalYAML() (interface{}, error) {
+	return levelToName[level], nil
+}
+
+func (level *Level) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	v := ""
+	if err := unmarshal(&v); err != nil {
+		return err
+	}
+	*level = nameToLevel[strings.ToUpper(v)]
+	return nil
+}
+
 // UnmarshalJSON implements the json.Marshaler interface.
 func (level Level) MarshalJSON() ([]byte, error) {
 	return []byte(`"` + level.String() + `"`), nil

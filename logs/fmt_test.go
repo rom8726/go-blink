@@ -7,9 +7,9 @@ import (
 	"time"
 )
 
-func TestStringFormat_Format(t *testing.T) {
-	f := newStringFormat(FormatConfig{
-		Message: "${Time} ${Level} ${Write} ${Message} ${Context}",
+func TestFormat_Format(t *testing.T) {
+	f := newFormat(&FormatConfig{
+		Message: "${Time} ${Level} ${Log} ${Message} ${Context}",
 		Context: map[string]string{"ID": "id"},
 	})
 
@@ -24,5 +24,5 @@ func TestStringFormat_Format(t *testing.T) {
 		Args:   []interface{}{"John Doe"},
 	})
 
-	assert.Equal(t, "0001-01-01 00:00:00 INFO test Hello John Doe map[id:22fefb70-1cb6-4e3d]", message)
+	assert.Equal(t, "0001-01-01 00:00:00 INFO test Hello John Doe id=22fefb70-1cb6-4e3d", message)
 }

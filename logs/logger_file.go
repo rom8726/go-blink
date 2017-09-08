@@ -7,14 +7,14 @@ import (
 	"os"
 )
 
-// fileWriter logs records to files and rotates the files.
-type fileWriter struct {
+// fileLogger logs records to files and rotates the files.
+type fileLogger struct {
 	level  Level
-	format format
+	format *format
 	logger *log.Logger
 }
 
-func newFileWriter(config WriterConfig, format format) *fileWriter {
+func newFileLogger(config LoggerConfig) *fileLogger {
 	if err := checkLogFile(config.File); err != nil {
 		log.Fatal(err)
 	}
@@ -27,14 +27,14 @@ func newFileWriter(config WriterConfig, format format) *fileWriter {
 		LocalTime:  true,
 	}
 
-	return &fileWriter{
+	return &fileLogger{
 		level:  config.Level,
-		format: format,
+		format: newFormat(config.Format),
 		logger: log.New(rotated, "", log.LstdFlags),
 	}
 }
 
-func (w *fileWriter) Write(ctx context.Context, record Record) {
+func (w *fileLogger) Write(ctx context.Context, record Record) {
 	if record.Level < w.level {
 		return
 	}
