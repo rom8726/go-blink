@@ -60,7 +60,7 @@ func (f *format) formatMessage(ctx context.Context, record Record) string {
 }
 
 func (f *format) formatContext(ctx context.Context) string {
-	if len(f.contextKeys) == 0 {
+	if ctx == nil || len(f.contextKeys) == 0 {
 		return ""
 	}
 
