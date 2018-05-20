@@ -1,13 +1,13 @@
 package logs
 
-import "github.com/ivankorobkov/di"
+import "github.com/ivankorobkov/go-di"
 
 func Module(m *di.Module) {
-	m.MarkPackageDep(Config{})
-	m.AddConstructor(New)
+	m.Dep(Config{})
+	m.Add(New)
 }
 
 func TestModule(m *di.Module) {
 	m.Import(Module)
-	m.AddConstructor(NewConfig)
+	m.Add(NewConfig)
 }
