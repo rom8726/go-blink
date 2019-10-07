@@ -3,11 +3,12 @@ package httpd
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"sync"
+
 	"github.com/gorilla/websocket"
 	"github.com/ivankorobkov/go-blink/errs"
 	"github.com/ivankorobkov/go-blink/logs"
-	"net/http"
-	"sync"
 )
 
 type WebSocket struct {
@@ -155,7 +156,7 @@ func (ws *WebSocket) sendMessageOrRecover(msg []byte) (err error) {
 	defer w.Close()
 
 	_, err = w.Write(msg)
-	ws.log.Debugf(ws.ctx, "WebSocket sent a message, len=%d", len(msg))
+	ws.log.Tracef(ws.ctx, "WebSocket sent a message, len=%d", len(msg))
 	return err
 }
 

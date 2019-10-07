@@ -3,11 +3,12 @@ package httpd
 import (
 	"context"
 	"encoding/json"
+	"net/http"
+	"sync"
+
 	"github.com/ivankorobkov/go-blink/errs"
 	"github.com/ivankorobkov/go-blink/logs"
 	"github.com/manucorporat/sse"
-	"net/http"
-	"sync"
 )
 
 type SSEStream struct {
@@ -126,7 +127,7 @@ func (s *SSEStream) sendOrRecover(event sse.Event) (err error) {
 		return err
 	}
 
-	s.log.Debugf(s.ctx, "SSE sent an event")
+	s.log.Tracef(s.ctx, "SSE sent an event")
 	flusher, ok := s.w.(http.Flusher)
 	if ok {
 		flusher.Flush()
