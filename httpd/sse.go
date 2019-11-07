@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"sync"
 
-	"github.com/ivankorobkov/go-blink/errs"
-	"github.com/ivankorobkov/go-blink/logs"
+	"github.com/rom8726/go-blink/errs"
+	"github.com/rom8726/go-blink/logs"
 	"github.com/manucorporat/sse"
 )
 

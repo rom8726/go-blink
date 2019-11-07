@@ -3,7 +3,7 @@ package logs
 import (
 	"context"
 	"fmt"
-	"github.com/ivankorobkov/go-blink/strs"
+	"github.com/rom8726/go-blink/strs"
 	"strings"
 )
 

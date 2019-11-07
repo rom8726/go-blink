@@ -3,7 +3,7 @@ package httpd
 import (
 	"bytes"
 	"context"
-	"github.com/ivankorobkov/go-blink/logs"
+	"github.com/rom8726/go-blink/logs"
 	"net/http"
 	"sync"
 )
