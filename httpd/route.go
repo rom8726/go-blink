@@ -121,7 +121,7 @@ func (r *Route) Middleware(pattern string, m Middleware) {
 	}
 
 	route := r.makePath(pattern)
-	route.Middle = append(r.Middle, m)
+	route.Middle = append(route.Middle, m)
 }
 
 func (r *Route) Match(method string, path string) ([]Middleware, Handler, Params, error) {
